@@ -1,38 +1,23 @@
 // server.js
+import express from 'express';
+import http from 'http';
+import { Server as socketIo } from 'socket.io';
+import session from 'express-session';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+import dotenv from 'dotenv';
+import { Configuration, OpenAIApi } from 'openai';
 
-// Load environment variables first
-require('dotenv').config();
+dotenv.config();
 
-// Check Node version
-const requiredNodeVersion = 14;
-if (parseInt(process.versions.node.split('.')[0], 10) < requiredNodeVersion) {
-  console.error(`Node version ${process.versions.node} is too old. Please use Node ${requiredNodeVersion} or above.`);
-  process.exit(1);
-}
-
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const session = require('express-session');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
-const fs = require('fs');
+// Determine __dirname in an ESM context
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // --- OpenAI Setup ---
-let Configuration, OpenAIApi;
-try {
-  const openaiModule = require("openai");
-  Configuration = openaiModule.Configuration;
-  OpenAIApi = openaiModule.OpenAIApi;
-  if (typeof Configuration !== "function" || typeof OpenAIApi !== "function") {
-    throw new Error("Invalid OpenAI package exports.");
-  }
-} catch (err) {
-  console.error("Error loading OpenAI package:", err);
-  process.exit(1);
-}
-
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -50,25 +35,25 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Secure session configuration (in production, use a persistent store)
+// Secure session configuration (for production, consider a persistent store)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'default-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // set to true when using HTTPS in production
+    secure: process.env.NODE_ENV === 'production', // true if using HTTPS in production
     httpOnly: true,
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 1 day
   }
 }));
 
-// Serve static files from the "public" directory
+// Serve static files from the "public" directory (create a "public" folder with your client files)
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Create HTTP server and attach Socket.IO for real-time updates
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = new socketIo(server);
 
 // --- Survey Configuration ---
 const surveyQuestions = [
@@ -134,12 +119,12 @@ async function generateAISummary() {
 }
 
 // --- Endpoints ---
-// Returns the survey questions
+// Endpoint to retrieve survey questions
 app.get('/survey', (req, res) => {
   res.json({ questions: surveyQuestions });
 });
 
-// Receives survey responses, aggregates the results, and triggers AI summary generation as needed
+// Endpoint to submit survey responses
 app.post('/submitSurvey', async (req, res) => {
   if (req.session.submitted) {
     return res.status(403).json({ error: 'Du hast bereits teilgenommen.' });
@@ -172,7 +157,7 @@ app.post('/submitSurvey', async (req, res) => {
   return res.json({ success: true, results: surveyResults, totalResponses, currentAISummary });
 });
 
-// Returns the current survey results and AI summary
+// Endpoint to retrieve current survey results and AI summary
 app.get('/results', (req, res) => {
   res.json({ surveyResults, totalResponses, currentAISummary });
 });
