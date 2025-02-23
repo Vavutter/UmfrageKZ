@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Österreichischer Lehrplan Umfrage</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Poppins:400,600&display=swap" rel="stylesheet" />
+  <!-- Chart.js CDN für Diagramme -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Canvas-Confetti CDN für Konfetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <!-- Socket.IO Client (wird vom Backend bereitgestellt) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    /* Basis-Reset */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+    
+    /* CSS Variablen für Light/Dark Mode */
+    :root {
+      --bg-overlay-light: rgba(255, 255, 255, 0.8);
+      --text-color-light: #222;
+      --border-color-light: rgba(0, 0, 0, 0.2);
+      
+      --bg-overlay-dark: rgba(0, 0, 0, 0.6);
+      --text-color-dark: #fff;
+      --border-color-dark: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Animierter Vollbild-Gradient-Hintergrund */
+    body {
+      font-family: 'Poppins', sans-serif;
+      overflow: hidden;
+      min-height: 100vh;
+      background: linear-gradient(270deg, #a8edea, #fed6e3, #a8edea);
+      background-size: 600% 600%;
+      animation: gradientAnimation 15s ease infinite;
+      transition: background 0.5s ease;
+    }
+    @keyframes gradientAnimation {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    /* Dunkler Modus Hintergrund */
+    body.dark {
+      background: linear-gradient(270deg, #232526, #414345);
+      background-size: 600% 600%;
+      animation: gradientAnimation 15s ease infinite;
+    }
+    
+    /* Vollbild-Seiten im Glassmorphism-Stil */
+    .page {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-overlay-light);
+      border: 1px solid var(--border-color-light);
+      text-align: center;
+      transition: background 0.5s, border-color 0.5s, color 0.5s,
+                  opacity 0.5s ease, transform 0.5s ease;
+      color: var(--text-color-light);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(20px);
+      z-index: 1;
+    }
+    .page.active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+      z-index: 2;
+    }
+    /* Anpassungen im Dunkelmodus */
+    body.dark .page {
+      background: var(--bg-overlay-dark);
+      border: 1px solid var(--border-color-dark);
+      color: var(--text-color-dark);
+    }
+    
+    /* Textboxen für Inhalte */
+    .text-box {
+      background: rgba(255, 255, 255, 0.9);
+      padding: 1rem;
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      transition: background 0.5s, color 0.5s;
+      width: 100%;
+      max-width: 500px;
+    }
+    body.dark .text-box {
+      background: rgba(0, 0, 0, 0.8);
+    }
+    
+    /* Überschriften & Text */
+    h1, h2 {
+      margin-bottom: 1rem;
+      font-size: 2rem;
+      transition: color 0.5s;
+    }
+    p {
+      margin-bottom: 1.5rem;
+      line-height: 1.4;
+      font-size: 1rem;
+      transition: color 0.5s;
+    }
+    
+    /* Schaltflächen */
+    .btn {
+      background: rgba(255, 255, 255, 0.3);
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+      font-weight: 600;
+      margin-top: 1rem;
+      font-size: 1rem;
+      color: inherit;
+    }
+    .btn:hover {
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.5);
+    }
+    
+    /* Antwortoptionen */
+    .option {
+      display: block;
+      background: rgba(255, 255, 255, 0.3);
+      margin: 10px 0;
+      padding: 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+      font-size: 1rem;
+      color: inherit;
+    }
+    .option:hover {
+      transform: scale(1.03);
+      background: rgba(255, 255, 255, 0.5);
+    }
+    .option.selected {
+      background: rgba(255, 255, 255, 0.7);
+      transform: scale(1.05);
+    }
+    .option input {
+      margin-right: 10px;
+    }
+    
+    /* Diagramm-Container */
+    #chartContainer {
+      position: relative;
+      height: 300px;
+      width: 100%;
+      max-width: 500px;
+      margin: 20px 0;
+    }
+    
+    /* Toggle-Schalter für Dark Mode */
+    #toggleMode {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 60px;
+      height: 30px;
+      border-radius: 15px;
+      border: none;
+      background: #ccc;
+      cursor: pointer;
+      transition: background 0.5s ease;
+      z-index: 10;
+    }
+    #toggleMode::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.5s ease;
+    }
+    body.dark #toggleMode {
+      background: #666;
+    }
+    body.dark #toggleMode::before {
+      transform: translateX(30px);
+    }
+    
+    /* Wellenanimation Overlay – beeindruckender Modewechsel */
+    #waveOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .wave {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      clip-path: ellipse(0% 0% at top left);
+      transform: rotate(45deg);
+      animation: waveAnimation 1s ease-out forwards;
+    }
+    @keyframes waveAnimation {
+      0% {
+        clip-path: ellipse(0% 0% at top left);
+        opacity: 1;
+      }
+      100% {
+        clip-path: ellipse(150% 150% at top left);
+        opacity: 0;
+      }
+    }
+    
+    /* Share Button */
+    #shareBtn {
+      background: rgba(0, 123, 255, 0.8);
+      color: #fff;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 50px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 1rem;
+      font-size: 1rem;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    #shareBtn:hover {
+      transform: scale(1.05);
+      background: rgba(0, 123, 255, 1);
+    }
+  </style>
+</head>
+<body>
+  <!-- Dark/Light Mode Toggle -->
+  <button id="toggleMode" aria-label="Toggle Dark Mode"></button>
+  
+  <!-- Landing Page -->
+  <div id="landing" class="page active">
+    <div class="text-box">
+      <h1>Deine Meinung zählt!</h1>
+      <p>Hilf mit, die Zukunft des österreichischen Bildungssystems zu gestalten, indem du deine Meinung zum Lehrplan teilst.</p>
+    </div>
+    <button id="startBtn" class="btn">Umfrage starten</button>
+  </div>
+  
+  <!-- Survey Page -->
+  <div id="survey" class="page">
+    <div class="text-box">
+      <h2 id="questionTitle"></h2>
+    </div>
+    <div id="optionsContainer"></div>
+    <button id="nextBtn" class="btn">Weiter</button>
+  </div>
+  
+  <!-- Results Page -->
+  <div id="results" class="page">
+    <div class="text-box">
+      <h2>Vielen Dank für deine Teilnahme!</h2>
+      <p>Hier sind die aktuellen Umfrageergebnisse:</p>
+    </div>
+    <div id="chartContainer">
+      <canvas id="resultChart"></canvas>
+    </div>
+    <div class="text-box" id="aiSummaryBox" style="display: none;">
+      <p id="aiSummaryText"></p>
+    </div>
+    <button id="shareBtn" class="btn" style="display: none;">Ergebnis teilen</button>
+  </div>
+  
+  <!-- Wave Overlay for Mode Transition -->
+  <div id="waveOverlay"></div>
+  
+  <script>
+    // Global Variables
+    let surveyQuestions = [];
+    let currentQuestionIndex = 0;
+    const responses = [];
+    let chartInstance = null;
+    
+    // DOM Elements
+    const landingPage = document.getElementById("landing");
+    const surveyPage = document.getElementById("survey");
+    const resultsPage = document.getElementById("results");
+    const startBtn = document.getElementById("startBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const questionTitle = document.getElementById("questionTitle");
+    const optionsContainer = document.getElementById("optionsContainer");
+    const resultChartCanvas = document.getElementById("resultChart");
+    const aiSummaryBox = document.getElementById("aiSummaryBox");
+    const aiSummaryText = document.getElementById("aiSummaryText");
+    const shareBtn = document.getElementById("shareBtn");
+    const toggleModeBtn = document.getElementById("toggleMode");
+    const waveOverlay = document.getElementById("waveOverlay");
+    
+    // Socket.IO Connection for Real-Time Updates
+    const socket = io();
+    socket.on('updateResults', (data) => {
+      // Update the chart and AI summary if on results page
+      if (resultsPage.classList.contains("active")) {
+        updateChart(data.surveyResults);
+        if(data.currentAISummary) {
+          aiSummaryText.textContent = data.currentAISummary;
+          aiSummaryBox.style.display = "block";
+          shareBtn.style.display = "inline-block";
+        }
+      }
+    });
+    
+    function showPage(page) {
+      [landingPage, surveyPage, resultsPage].forEach(p => p.classList.remove("active"));
+      page.classList.add("active");
+    }
+    
+    // Fetch survey questions from the backend
+    async function loadSurvey() {
+      try {
+        const res = await fetch('/survey');
+        const data = await res.json();
+        surveyQuestions = data.questions;
+        currentQuestionIndex = 0;
+        loadQuestion();
+      } catch(err) {
+        console.error("Error loading survey questions:", err);
+      }
+    }
+    
+    function loadQuestion() {
+      const currentQuestion = surveyQuestions[currentQuestionIndex];
+      questionTitle.textContent = currentQuestion.question;
+      optionsContainer.innerHTML = "";
+      currentQuestion.options.forEach((option, index) => {
+        const label = document.createElement("label");
+        label.className = "option";
+        label.innerHTML = `<input type="radio" name="option" value="${index}"> ${option}`;
+        label.addEventListener("click", () => {
+          document.querySelectorAll("label.option").forEach(el => el.classList.remove("selected"));
+          label.classList.add("selected");
+        });
+        optionsContainer.appendChild(label);
+      });
+    }
+    
+    // Event Handlers
+    startBtn.addEventListener("click", () => {
+      loadSurvey();
+      showPage(surveyPage);
+    });
+    
+    nextBtn.addEventListener("click", async () => {
+      const selectedOption = document.querySelector('input[name="option"]:checked');
+      if (!selectedOption) {
+        alert("Bitte wähle eine Option aus.");
+        return;
+      }
+      responses[currentQuestionIndex] = parseInt(selectedOption.value);
+      currentQuestionIndex++;
+      if (currentQuestionIndex < surveyQuestions.length) {
+        loadQuestion();
+      } else {
+        // Submit responses to the backend
+        try {
+          const res = await fetch('/submitSurvey', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ responses })
+          });
+          const data = await res.json();
+          if (data.error) {
+            alert(data.error);
+            return;
+          }
+          showPage(resultsPage);
+          updateChart(data.results);
+          if (data.currentAISummary) {
+            aiSummaryText.textContent = data.currentAISummary;
+            aiSummaryBox.style.display = "block";
+            shareBtn.style.display = "inline-block";
+          }
+          triggerConfetti();
+        } catch(err) {
+          console.error("Error submitting survey:", err);
+        }
+      }
+    });
+    
+    function updateChart(surveyResults) {
+      const isDark = document.body.classList.contains("dark");
+      const chartData = {
+        labels: surveyQuestions[0].options,
+        datasets: [{
+          label: "Antworten",
+          data: surveyResults.rating,
+          backgroundColor: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)",
+          borderColor: isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.7)",
+          borderWidth: 2
+        }]
+      };
+      const options = {
+        scales: {
+          x: {
+            ticks: { color: isDark ? "#fff" : "#222", font: { size: 14 } },
+            grid: { color: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)" }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: isDark ? "#fff" : "#222", font: { size: 14 } },
+            grid: { color: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)" }
+          }
+        },
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { 
+          legend: { display: false },
+          tooltip: {
+            bodyColor: isDark ? "#fff" : "#222",
+            titleColor: isDark ? "#fff" : "#222"
+          }
+        }
+      };
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+      chartInstance = new Chart(resultChartCanvas, {
+        type: "bar",
+        data: chartData,
+        options: options
+      });
+    }
+    
+    function triggerConfetti() {
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    }
+    
+    function triggerWaveAnimation() {
+      waveOverlay.innerHTML = "";
+      const wave = document.createElement("div");
+      wave.className = "wave";
+      waveOverlay.appendChild(wave);
+      setTimeout(() => {
+        waveOverlay.innerHTML = "";
+      }, 1000);
+    }
+    
+    toggleModeBtn.addEventListener("click", () => {
+      triggerWaveAnimation();
+      setTimeout(() => {
+        document.body.classList.toggle("dark");
+        [landingPage, surveyPage, resultsPage].forEach(page => page.classList.toggle("dark"));
+        // If results page is active, update chart colors
+        if (resultsPage.classList.contains("active")) {
+          updateChart(chartInstance ? chartInstance.data.datasets[0].data : { rating: [] });
+        }
+      }, 200);
+    });
+    
+    // Share Button using Web Share API
+    shareBtn.addEventListener("click", () => {
+      if (navigator.share) {
+        navigator.share({
+          title: 'Mein Umfrage-Ergebnis',
+          text: aiSummaryText.textContent,
+          url: window.location.href
+        })
+        .then(() => console.log('Ergebnis geteilt'))
+        .catch((error) => console.error('Teilen fehlgeschlagen', error));
+      } else {
+        alert("Dein Browser unterstützt diese Funktion nicht.");
+      }
+    });
+    
+  </script>
+</body>
+</html>
