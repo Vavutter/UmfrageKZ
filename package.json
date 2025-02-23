@@ -1,0 +1,17 @@
+{
+  "name": "umfragekz",
+  "version": "1.0.0",
+  "description": "Umfrage zur österreichischen Lehrplan-Reform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "helmet": "^6.1.2",
+    "socket.io": "^4.5.4",
+    "dotenv": "^16.0.3",
+    "openai": "^4.1.0"
+  }
+}
