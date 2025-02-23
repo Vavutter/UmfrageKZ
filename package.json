@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Umfrage zur österreichischen Lehrplan-Reform",
   "main": "server.js",
-  "type": "module",        
+  "type": "module",       // <-- Add this line
   "scripts": {
     "start": "node server.js"
   },
@@ -15,5 +15,8 @@
     "socket.io": "^4.5.4",
     "dotenv": "^16.0.3",
     "openai": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=14.x"
   }
 }
