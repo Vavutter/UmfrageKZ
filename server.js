@@ -9,16 +9,17 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-// --- OpenAI setup ---
+// --- OpenAI Setup ---
+// Use a fallback for CommonJS modules that might export a default property
 const openaiModule = require("openai");
-console.log("openaiModule:", openaiModule);
+const openaiExports = openaiModule.default || openaiModule;
+const { Configuration, OpenAIApi } = openaiExports;
 
-if (typeof openaiModule.Configuration !== "function" || typeof openaiModule.OpenAIApi !== "function") {
-  console.error("Error: openaiModule does not export Configuration or OpenAIApi as expected. Please verify your openai package version.");
+if (typeof Configuration !== "function" || typeof OpenAIApi !== "function") {
+  console.error("Error: Failed to load Configuration or OpenAIApi from openai package.");
   process.exit(1);
 }
 
-const { Configuration, OpenAIApi } = openaiModule;
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -29,14 +30,14 @@ const app = express();
 app.use(helmet());
 app.use(express.json());
 
-// Rate limiting
+// Rate limiting to mitigate abuse
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
+  windowMs: 1 * 60 * 1000, // 1 minute
   max: 60,
 });
 app.use(limiter);
 
-// Secure session configuration
+// Secure session configuration (Note: In production, use a persistent store)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'default-secret',
   resave: false,
@@ -45,11 +46,11 @@ app.use(session({
     secure: process.env.NODE_ENV === 'production', // true if HTTPS
     httpOnly: true,
     sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
   }
 }));
 
-// Serve static files from "public"
+// Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Create HTTP server and attach Socket.IO
@@ -75,6 +76,7 @@ const surveyQuestions = [
   }
 ];
 
+// In-memory aggregated survey results (for production, consider using a persistent database)
 let surveyResults = {
   rating: [0, 0, 0, 0, 0],
   improvement: [0, 0, 0, 0, 0],
@@ -135,12 +137,14 @@ app.post('/submitSurvey', async (req, res) => {
     return res.status(400).json({ error: 'Ungültiger Antwortwert.' });
   }
   
+  // Update aggregated results
   surveyResults.rating[responses[0]]++;
   surveyResults.improvement[responses[1]]++;
   surveyResults.support[responses[2]]++;
   totalResponses++;
   req.session.submitted = true;
   
+  // Check if it's time to generate a new AI summary
   if (totalResponses < 100) {
     if (initialThresholds.includes(totalResponses)) {
       await generateAISummary();
@@ -159,7 +163,7 @@ app.get('/results', (req, res) => {
   res.json({ surveyResults, totalResponses, currentAISummary });
 });
 
-// --- Socket.IO for real-time updates ---
+// --- Socket.IO for Real-Time Updates ---
 io.on('connection', (socket) => {
   socket.emit('updateResults', { surveyResults, totalResponses, currentAISummary });
 });
