@@ -1,4 +1,15 @@
 // server.js
+
+// Load environment variables first
+require('dotenv').config();
+
+// Check Node version
+const requiredNodeVersion = 14;
+if (parseInt(process.versions.node.split('.')[0], 10) < requiredNodeVersion) {
+  console.error(`Node version ${process.versions.node} is too old. Please use Node ${requiredNodeVersion} or above.`);
+  process.exit(1);
+}
+
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -7,16 +18,18 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config();
 
 // --- OpenAI Setup ---
-// Instead of requiring the package.json for version checking, we simply require the module.
-const openaiModule = require("openai");
-
-// Destructure using the expected export structure for openai v4+
-const { Configuration, OpenAIApi } = openaiModule;
-if (typeof Configuration !== "function" || typeof OpenAIApi !== "function") {
-  console.error("Error: Failed to load Configuration or OpenAIApi from openai package.");
+let Configuration, OpenAIApi;
+try {
+  const openaiModule = require("openai");
+  Configuration = openaiModule.Configuration;
+  OpenAIApi = openaiModule.OpenAIApi;
+  if (typeof Configuration !== "function" || typeof OpenAIApi !== "function") {
+    throw new Error("Invalid OpenAI package exports.");
+  }
+} catch (err) {
+  console.error("Error loading OpenAI package:", err);
   process.exit(1);
 }
 
@@ -37,13 +50,13 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Secure session configuration (In production, use a persistent store)
+// Secure session configuration (in production, use a persistent store)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'default-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // true if HTTPS
+    secure: process.env.NODE_ENV === 'production', // set to true when using HTTPS in production
     httpOnly: true,
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 1 day
@@ -53,7 +66,7 @@ app.use(session({
 // Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Create HTTP server and attach Socket.IO
+// Create HTTP server and attach Socket.IO for real-time updates
 const server = http.createServer(app);
 const io = socketIo(server);
 
@@ -121,10 +134,12 @@ async function generateAISummary() {
 }
 
 // --- Endpoints ---
+// Returns the survey questions
 app.get('/survey', (req, res) => {
   res.json({ questions: surveyQuestions });
 });
 
+// Receives survey responses, aggregates the results, and triggers AI summary generation as needed
 app.post('/submitSurvey', async (req, res) => {
   if (req.session.submitted) {
     return res.status(403).json({ error: 'Du hast bereits teilgenommen.' });
@@ -157,6 +172,7 @@ app.post('/submitSurvey', async (req, res) => {
   return res.json({ success: true, results: surveyResults, totalResponses, currentAISummary });
 });
 
+// Returns the current survey results and AI summary
 app.get('/results', (req, res) => {
   res.json({ surveyResults, totalResponses, currentAISummary });
 });
