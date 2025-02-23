@@ -10,10 +10,15 @@ const fs = require('fs');
 require('dotenv').config();
 
 // --- OpenAI Setup ---
-// Use a fallback for CommonJS modules that might export a default property
 const openaiModule = require("openai");
-const openaiExports = openaiModule.default || openaiModule;
-const { Configuration, OpenAIApi } = openaiExports;
+
+// Attempt to obtain Configuration and OpenAIApi from various export structures
+const Configuration =
+  openaiModule.Configuration ||
+  (openaiModule.default && openaiModule.default.Configuration);
+const OpenAIApi =
+  openaiModule.OpenAIApi ||
+  (openaiModule.default && openaiModule.default.OpenAIApi);
 
 if (typeof Configuration !== "function" || typeof OpenAIApi !== "function") {
   console.error("Error: Failed to load Configuration or OpenAIApi from openai package.");
@@ -37,7 +42,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Secure session configuration (Note: In production, use a persistent store)
+// Secure session configuration (In production, use a persistent store)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'default-secret',
   resave: false,
@@ -76,7 +81,7 @@ const surveyQuestions = [
   }
 ];
 
-// In-memory aggregated survey results (for production, consider using a persistent database)
+// In-memory aggregated survey results (for production, consider a persistent database)
 let surveyResults = {
   rating: [0, 0, 0, 0, 0],
   improvement: [0, 0, 0, 0, 0],
@@ -86,9 +91,7 @@ let totalResponses = 0;
 
 // --- AI Summary Storage ---
 const secureDir = path.join(__dirname, 'secure');
-if (!fs.existsSync(secureDir)) {
-  fs.mkdirSync(secureDir);
-}
+if (!fs.existsSync(secureDir)) fs.mkdirSync(secureDir);
 const aiSummaryFilePath = path.join(secureDir, 'ai_summary.txt');
 let currentAISummary = fs.existsSync(aiSummaryFilePath)
   ? fs.readFileSync(aiSummaryFilePath, 'utf8')
@@ -137,14 +140,12 @@ app.post('/submitSurvey', async (req, res) => {
     return res.status(400).json({ error: 'Ungültiger Antwortwert.' });
   }
   
-  // Update aggregated results
   surveyResults.rating[responses[0]]++;
   surveyResults.improvement[responses[1]]++;
   surveyResults.support[responses[2]]++;
   totalResponses++;
   req.session.submitted = true;
   
-  // Check if it's time to generate a new AI summary
   if (totalResponses < 100) {
     if (initialThresholds.includes(totalResponses)) {
       await generateAISummary();
