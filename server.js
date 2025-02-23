@@ -9,7 +9,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import { Configuration, OpenAIApi } from 'openai';
+
+// Import the OpenAI package using a default import, then destructure.
+import openaiModule from 'openai';
+const { Configuration, OpenAIApi } = openaiModule;
 
 dotenv.config();
 
