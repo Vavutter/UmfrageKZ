@@ -11,15 +11,16 @@ require('dotenv').config();
 
 // --- OpenAI Setup ---
 const openaiModule = require("openai");
+const openaiPackageVersion = require("openai/package.json").version;
+console.log("OpenAI package version:", openaiPackageVersion);
 
-// Attempt to obtain Configuration and OpenAIApi from various export structures
-const Configuration =
-  openaiModule.Configuration ||
-  (openaiModule.default && openaiModule.default.Configuration);
-const OpenAIApi =
-  openaiModule.OpenAIApi ||
-  (openaiModule.default && openaiModule.default.OpenAIApi);
+// Abort if openai version is less than 4.0.0
+if (parseFloat(openaiPackageVersion) < 4.0) {
+  console.error("Error: Please upgrade the openai package to version 4.x or later.");
+  process.exit(1);
+}
 
+const { Configuration, OpenAIApi } = openaiModule;
 if (typeof Configuration !== "function" || typeof OpenAIApi !== "function") {
   console.error("Error: Failed to load Configuration or OpenAIApi from openai package.");
   process.exit(1);
@@ -81,7 +82,7 @@ const surveyQuestions = [
   }
 ];
 
-// In-memory aggregated survey results (for production, consider a persistent database)
+// In-memory aggregated survey results (for production, use a persistent database)
 let surveyResults = {
   rating: [0, 0, 0, 0, 0],
   improvement: [0, 0, 0, 0, 0],
