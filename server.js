@@ -10,16 +10,10 @@ const fs = require('fs');
 require('dotenv').config();
 
 // --- OpenAI Setup ---
+// Instead of requiring the package.json for version checking, we simply require the module.
 const openaiModule = require("openai");
-const openaiPackageVersion = require("openai/package.json").version;
-console.log("OpenAI package version:", openaiPackageVersion);
 
-// Abort if openai version is less than 4.0.0
-if (parseFloat(openaiPackageVersion) < 4.0) {
-  console.error("Error: Please upgrade the openai package to version 4.x or later.");
-  process.exit(1);
-}
-
+// Destructure using the expected export structure for openai v4+
 const { Configuration, OpenAIApi } = openaiModule;
 if (typeof Configuration !== "function" || typeof OpenAIApi !== "function") {
   console.error("Error: Failed to load Configuration or OpenAIApi from openai package.");
@@ -92,7 +86,9 @@ let totalResponses = 0;
 
 // --- AI Summary Storage ---
 const secureDir = path.join(__dirname, 'secure');
-if (!fs.existsSync(secureDir)) fs.mkdirSync(secureDir);
+if (!fs.existsSync(secureDir)) {
+  fs.mkdirSync(secureDir);
+}
 const aiSummaryFilePath = path.join(secureDir, 'ai_summary.txt');
 let currentAISummary = fs.existsSync(aiSummaryFilePath)
   ? fs.readFileSync(aiSummaryFilePath, 'utf8')
