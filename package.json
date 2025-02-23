@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Umfrage zur österreichischen Lehrplan-Reform",
   "main": "server.js",
+  "type": "module",        // <---- ADD THIS LINE
   "scripts": {
     "start": "node server.js"
   },
